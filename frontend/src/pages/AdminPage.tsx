@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -37,9 +39,14 @@ interface Reservation {
 
 interface Table {
   id: number
-  table_number: string | number
+  table_number: string
   capacity: number
   is_active: boolean
+}
+
+interface TableFormState {
+  number: string
+  capacity: string
 }
 
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'cancelled'
@@ -64,6 +71,15 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [actionId, setActionId] = useState<number | null>(null)
+
+  // Table management state
+  const [showAddTable, setShowAddTable] = useState(false)
+  const [addForm, setAddForm] = useState<TableFormState>({ number: '', capacity: '' })
+  const [addLoading, setAddLoading] = useState(false)
+  const [editingTable, setEditingTable] = useState<Table | null>(null)
+  const [editForm, setEditForm] = useState<TableFormState>({ number: '', capacity: '' })
+  const [editLoading, setEditLoading] = useState(false)
+  const [tableActionId, setTableActionId] = useState<number | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -113,6 +129,77 @@ export default function AdminPage() {
     } finally {
       setActionId(null)
     }
+  }
+
+  const handleToggleTable = async (table: Table) => {
+    setTableActionId(table.id)
+    try {
+      const { data } = await api.patch(`/tables/${table.id}/toggle`, { is_active: !table.is_active })
+      setTables((prev) => prev.map((t) => (t.id === table.id ? data : t)))
+      toast.success(`Table ${table.table_number} ${data.is_active ? 'activated' : 'deactivated'}.`)
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to toggle table')
+    } finally {
+      setTableActionId(null)
+    }
+  }
+
+  const handleAddTable = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!addForm.number.trim() || !addForm.capacity) return
+    setAddLoading(true)
+    try {
+      const { data } = await api.post('/restaurants/1/tables', {
+        number: addForm.number.trim(),
+        capacity: parseInt(addForm.capacity),
+      })
+      setTables((prev) => [...prev, data])
+      setAddForm({ number: '', capacity: '' })
+      setShowAddTable(false)
+      toast.success(`Table ${data.table_number} added.`)
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to add table')
+    } finally {
+      setAddLoading(false)
+    }
+  }
+
+  const handleEditTable = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingTable) return
+    setEditLoading(true)
+    try {
+      const { data } = await api.patch(`/tables/${editingTable.id}`, {
+        number: editForm.number.trim() || undefined,
+        capacity: editForm.capacity ? parseInt(editForm.capacity) : undefined,
+      })
+      setTables((prev) => prev.map((t) => (t.id === editingTable.id ? data : t)))
+      setEditingTable(null)
+      toast.success(`Table ${data.table_number} updated.`)
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to update table')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  const handleDeleteTable = async (table: Table) => {
+    if (!window.confirm(`Delete table ${table.table_number}? This cannot be undone.`)) return
+    setTableActionId(table.id)
+    try {
+      await api.delete(`/tables/${table.id}`)
+      setTables((prev) => prev.filter((t) => t.id !== table.id))
+      toast.success(`Table ${table.table_number} deleted.`)
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to delete table')
+    } finally {
+      setTableActionId(null)
+    }
+  }
+
+  const openEdit = (table: Table) => {
+    setEditingTable(table)
+    setEditForm({ number: table.table_number, capacity: String(table.capacity) })
   }
 
   // Stats
@@ -323,9 +410,82 @@ export default function AdminPage() {
       {/* Tables */}
       <Card>
         <CardHeader>
-          <CardTitle>Restaurant Tables</CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <CardTitle>Restaurant Tables</CardTitle>
+            <Button size="sm" onClick={() => { setShowAddTable((v) => !v); setAddForm({ number: '', capacity: '' }) }}>
+              {showAddTable ? 'Cancel' : '+ Add Table'}
+            </Button>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Add table form */}
+          {showAddTable && (
+            <form onSubmit={handleAddTable} className="flex flex-wrap items-end gap-3 rounded-lg border p-4 bg-muted/40">
+              <div className="space-y-1">
+                <Label htmlFor="add-number">Table number</Label>
+                <Input
+                  id="add-number"
+                  placeholder="e.g. 11"
+                  value={addForm.number}
+                  onChange={(e) => setAddForm((f) => ({ ...f, number: e.target.value }))}
+                  className="w-32"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="add-capacity">Capacity</Label>
+                <Input
+                  id="add-capacity"
+                  type="number"
+                  min={1}
+                  placeholder="e.g. 4"
+                  value={addForm.capacity}
+                  onChange={(e) => setAddForm((f) => ({ ...f, capacity: e.target.value }))}
+                  className="w-28"
+                  required
+                />
+              </div>
+              <Button type="submit" disabled={addLoading}>
+                {addLoading ? 'Adding…' : 'Add'}
+              </Button>
+            </form>
+          )}
+
+          {/* Edit table form */}
+          {editingTable && (
+            <form onSubmit={handleEditTable} className="flex flex-wrap items-end gap-3 rounded-lg border p-4 bg-blue-50 dark:bg-blue-950/20">
+              <p className="w-full text-sm font-medium text-muted-foreground">
+                Editing Table {editingTable.table_number}
+              </p>
+              <div className="space-y-1">
+                <Label htmlFor="edit-number">Table number</Label>
+                <Input
+                  id="edit-number"
+                  value={editForm.number}
+                  onChange={(e) => setEditForm((f) => ({ ...f, number: e.target.value }))}
+                  className="w-32"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="edit-capacity">Capacity</Label>
+                <Input
+                  id="edit-capacity"
+                  type="number"
+                  min={1}
+                  value={editForm.capacity}
+                  onChange={(e) => setEditForm((f) => ({ ...f, capacity: e.target.value }))}
+                  className="w-28"
+                />
+              </div>
+              <Button type="submit" disabled={editLoading}>
+                {editLoading ? 'Saving…' : 'Save'}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setEditingTable(null)}>
+                Cancel
+              </Button>
+            </form>
+          )}
+
           {tables.length === 0 ? (
             <p className="text-muted-foreground">No tables found.</p>
           ) : (
@@ -333,7 +493,7 @@ export default function AdminPage() {
               {tables.map((t) => (
                 <div
                   key={t.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
+                  className={`flex items-center justify-between rounded-lg border p-3 ${!t.is_active ? 'opacity-50' : ''}`}
                 >
                   <div>
                     <p className="font-medium">Table {t.table_number}</p>
@@ -343,7 +503,35 @@ export default function AdminPage() {
                     <Badge variant={t.is_active ? 'default' : 'secondary'}>
                       {t.is_active ? 'Active' : 'Inactive'}
                     </Badge>
-                    <span className="text-[10px] text-muted-foreground">Toggle coming soon</span>
+                    <div className="flex gap-1 mt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => openEdit(t)}
+                        disabled={tableActionId === t.id}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className={`h-6 px-2 text-xs ${t.is_active ? 'text-yellow-700 border-yellow-300 hover:bg-yellow-50' : 'text-green-700 border-green-300 hover:bg-green-50'}`}
+                        onClick={() => handleToggleTable(t)}
+                        disabled={tableActionId === t.id}
+                      >
+                        {t.is_active ? 'Deactivate' : 'Activate'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 px-2 text-xs text-red-700 border-red-300 hover:bg-red-50"
+                        onClick={() => handleDeleteTable(t)}
+                        disabled={tableActionId === t.id}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))}
