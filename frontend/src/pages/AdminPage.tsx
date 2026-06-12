@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from 'recharts'
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -24,6 +25,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+
+interface TableOptimizationStats {
+  table_id: number
+  table_number: string
+  capacity: number
+  is_active: boolean
+  total_reservations: number
+  confirmed_reservations: number
+  avg_party_size: number
+  avg_waste: number
+  utilization_pct: number
+}
+
+interface OptimizationRecommendation {
+  level: 'info' | 'warning' | 'danger'
+  message: string
+}
+
+interface OptimizationData {
+  window_days: number
+  table_stats: TableOptimizationStats[]
+  party_size_distribution: Record<string, number>
+  recommendations: OptimizationRecommendation[]
+}
 
 interface Reservation {
   id: number
@@ -80,6 +105,11 @@ export default function AdminPage() {
   const [editForm, setEditForm] = useState<TableFormState>({ number: '', capacity: '' })
   const [editLoading, setEditLoading] = useState(false)
   const [tableActionId, setTableActionId] = useState<number | null>(null)
+
+  // Optimization state
+  const [optimizationData, setOptimizationData] = useState<OptimizationData | null>(null)
+  const [optimizationLoading, setOptimizationLoading] = useState(false)
+  const [showOptimization, setShowOptimization] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -200,6 +230,19 @@ export default function AdminPage() {
   const openEdit = (table: Table) => {
     setEditingTable(table)
     setEditForm({ number: table.table_number, capacity: String(table.capacity) })
+  }
+
+  const fetchOptimization = async () => {
+    setOptimizationLoading(true)
+    try {
+      const { data } = await api.get('/restaurants/1/optimization')
+      setOptimizationData(data)
+      setShowOptimization(true)
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to load optimization data')
+    } finally {
+      setOptimizationLoading(false)
+    }
   }
 
   // Stats
@@ -538,6 +581,186 @@ export default function AdminPage() {
             </div>
           )}
         </CardContent>
+      </Card>
+
+      {/* Table Optimization */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div>
+              <CardTitle>Table Placement Optimization</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Analyse how well your table configuration matches actual demand.
+              </p>
+            </div>
+            <Button
+              onClick={showOptimization ? () => setShowOptimization(false) : fetchOptimization}
+              disabled={optimizationLoading}
+              variant={showOptimization ? 'outline' : 'default'}
+            >
+              {optimizationLoading ? 'Analysing…' : showOptimization ? 'Hide Analysis' : 'Run Analysis'}
+            </Button>
+          </div>
+        </CardHeader>
+        {showOptimization && optimizationData && (
+          <CardContent className="space-y-6">
+            {/* Recommendations */}
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">Recommendations (±{optimizationData.window_days} days)</h3>
+              {optimizationData.recommendations.map((rec, i) => (
+                <div
+                  key={i}
+                  className={`flex gap-2 rounded-md border px-3 py-2 text-sm ${
+                    rec.level === 'danger'
+                      ? 'border-red-200 bg-red-50 text-red-800'
+                      : rec.level === 'warning'
+                      ? 'border-yellow-200 bg-yellow-50 text-yellow-800'
+                      : 'border-blue-200 bg-blue-50 text-blue-800'
+                  }`}
+                >
+                  <span className="mt-0.5 shrink-0">
+                    {rec.level === 'danger' ? '🔴' : rec.level === 'warning' ? '🟡' : 'ℹ️'}
+                  </span>
+                  <span>{rec.message}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Utilisation chart */}
+            <div>
+              <h3 className="font-semibold text-sm mb-3">Table Utilisation (confirmed bookings)</h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart
+                  data={optimizationData.table_stats.map((t) => ({
+                    name: `T${t.table_number}`,
+                    utilization: t.utilization_pct,
+                    confirmed: t.confirmed_reservations,
+                    capacity: t.capacity,
+                  }))}
+                  margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} unit="%" domain={[0, 100]} />
+                  <Tooltip
+                    formatter={(value: number, name: string) => {
+                      if (name === 'utilization') return [`${value}%`, 'Utilisation']
+                      return [value, name]
+                    }}
+                  />
+                  <Bar dataKey="utilization" radius={[4, 4, 0, 0]}>
+                    {optimizationData.table_stats.map((t, index) => (
+                      <Cell
+                        key={index}
+                        fill={
+                          t.utilization_pct >= 70
+                            ? '#16a34a'
+                            : t.utilization_pct >= 30
+                            ? 'hsl(var(--primary))'
+                            : '#d97706'
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Party size distribution vs table capacities */}
+            <div>
+              <h3 className="font-semibold text-sm mb-3">Party Size Distribution vs Table Capacities</h3>
+              <div className="flex flex-wrap gap-4">
+                <div className="flex-1 min-w-[200px]">
+                  <p className="text-xs text-muted-foreground mb-2">Demand (party sizes)</p>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart
+                      data={Object.entries(optimizationData.party_size_distribution)
+                        .sort((a, b) => Number(a[0]) - Number(b[0]))
+                        .map(([size, count]) => ({ size: `${size}p`, count }))}
+                      margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                    >
+                      <XAxis dataKey="size" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <p className="text-xs text-muted-foreground mb-2">Supply (table capacities)</p>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <BarChart
+                      data={(() => {
+                        const dist: Record<string, number> = {}
+                        optimizationData.table_stats.forEach((t) => {
+                          const key = `${t.capacity}p`
+                          dist[key] = (dist[key] || 0) + 1
+                        })
+                        return Object.entries(dist)
+                          .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+                          .map(([cap, count]) => ({ cap, count }))
+                      })()}
+                      margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
+                    >
+                      <XAxis dataKey="cap" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Per-table detail table */}
+            <div>
+              <h3 className="font-semibold text-sm mb-3">Per-Table Details</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="pb-2 text-left font-medium">Table</th>
+                      <th className="pb-2 text-left font-medium">Capacity</th>
+                      <th className="pb-2 text-left font-medium">Confirmed</th>
+                      <th className="pb-2 text-left font-medium">Avg party</th>
+                      <th className="pb-2 text-left font-medium">Avg wasted seats</th>
+                      <th className="pb-2 text-left font-medium">Utilisation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {optimizationData.table_stats.map((t) => (
+                      <tr key={t.table_id} className={`border-b last:border-0 ${!t.is_active ? 'opacity-50' : ''}`}>
+                        <td className="py-2 pr-4 font-medium">
+                          Table {t.table_number}
+                          {!t.is_active && <span className="ml-1 text-xs text-muted-foreground">(inactive)</span>}
+                        </td>
+                        <td className="py-2 pr-4">{t.capacity}</td>
+                        <td className="py-2 pr-4">{t.confirmed_reservations}</td>
+                        <td className="py-2 pr-4">{t.confirmed_reservations > 0 ? t.avg_party_size : '—'}</td>
+                        <td className="py-2 pr-4">{t.confirmed_reservations > 0 ? t.avg_waste : '—'}</td>
+                        <td className="py-2 pr-4">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-20 rounded-full bg-muted overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${Math.min(t.utilization_pct, 100)}%`,
+                                  background:
+                                    t.utilization_pct >= 70 ? '#16a34a' : t.utilization_pct >= 30 ? 'hsl(var(--primary))' : '#d97706',
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs text-muted-foreground">{t.utilization_pct}%</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   )
