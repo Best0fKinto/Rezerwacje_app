@@ -19,7 +19,7 @@ function RootRedirect() {
 export default function App() {
   return (
     <BrowserRouter>
-      <Toaster richColors position="top-right" />
+      <Toaster richColors position="top-right" duration={2000} />
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<RootRedirect />} />
