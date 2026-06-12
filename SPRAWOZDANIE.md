@@ -115,6 +115,7 @@ Aplikacja udostępnia REST API z następującymi grupami zasobów:
 | Restauracje | GET | /restaurants/{id} | Szczegóły restauracji |
 | Restauracje | GET | /restaurants/{id}/tables | Lista stolików |
 | Restauracje | GET | /restaurants/{id}/availability | Wolne terminy |
+| Restauracje | GET | /restaurants/{id}/optimization | Analiza utilizacji stolików (admin) |
 | Rezerwacje | POST | /reservations | Utwórz rezerwację |
 | Rezerwacje | GET | /reservations/my | Rezerwacje zalogowanego klienta |
 | Rezerwacje | GET | /reservations | Wszystkie rezerwacje (admin) |
@@ -127,6 +128,30 @@ Pełna dokumentacja API dostępna jest automatycznie pod adresem `http://localho
 ### 4.4 Panel administracyjny
 
 Użytkownicy z rolą administratora mają dostęp do dedykowanego panelu, który umożliwia przeglądanie wszystkich rezerwacji (z możliwością filtrowania), potwierdzanie bądź anulowanie rezerwacji oraz wgląd w statystyki (wizualizacja danych przez Recharts).
+
+#### 4.4.1 Analiza i optymalizacja stolików (nowa funkcjonalność)
+
+W ramach commitu `dba3aa0` panel administracyjny został rozszerzony o sekcję **analizy utilizacji stolików**. Funkcjonalność obejmuje zarówno nowy endpoint backendowy, jak i odpowiadający mu widok w interfejsie administratora.
+
+**Backend — endpoint `/restaurants/{id}/optimization`**
+
+Nowy endpoint typu GET, dostępny wyłącznie dla administratorów, analizuje dane rezerwacyjne w konfigurowalnym oknie czasowym (domyślnie ±30 dni od dzisiaj). Dla każdego stolika obliczane są:
+
+- `total_reservations` — łączna liczba rezerwacji w oknie czasowym,
+- `confirmed_reservations` — liczba rezerwacji potwierdzonych,
+- `avg_party_size` — średnia wielkość grupy (dla rezerwacji potwierdzonych),
+- `avg_waste` — średnia liczba pustych miejsc przy potwierdzonych rezerwacjach (`capacity - party_size`),
+- `utilization_pct` — procentowe obłożenie stolika względem wszystkich dostępnych slotów w oknie.
+
+Dodatkowo endpoint zwraca rozkład wielkości grup (`party_size_distribution`) oraz listę rekomendacji z trzema poziomami ważności: `info`, `warning` i `danger`. Logika rekomendacji wykrywa m.in.:
+
+- stoliki nieużywane (0 potwierdzonych rezerwacji) — sugestia dezaktywacji,
+- stoliki przewymiarowane (średni `avg_waste` > 50% pojemności) — sugestia zastąpienia mniejszymi,
+- stoliki mocno obłożone (≥ 70% utilizacji) — sugestia dodania podobnego stolika,
+- zapotrzebowanie przekraczające dostępną pojemność (grupy większe niż największy stolik) — alert `danger`,
+- stoliki dobrze dopasowane do popytu (`avg_waste` ≤ 1 miejsce).
+
+Schematy odpowiedzi zdefiniowane są w `backend/app/schemas/restaurant.py` jako modele Pydantic v2: `TableOptimizationStats`, `OptimizationRecommendation` oraz `OptimizationResponse`.
 
 ### 4.5 Wdrożenie i konfiguracja środowiska
 
@@ -166,7 +191,7 @@ cd frontend && npm test
 
 Projekt TableBook stanowi kompletną, działającą aplikację do rezerwacji stolików restauracyjnych. Jego realizacja pozwoliła na praktyczne zastosowanie szeregu nowoczesnych technologii webowych po stronie zarówno klienta, jak i serwera. Zastosowanie Docker Compose znacząco upraszcza wdrożenie i zapewnia spójność środowiska niezależnie od platformy uruchomieniowej.
 
-Do mocnych stron projektu należą: czytelna architektura warstwowa, mechanizm zabezpieczenia przed podwójnym bookingiem, przemyślany system uwierzytelniania z tokenami JWT, automatyczna dokumentacja API oraz obecność testów automatycznych. Projekt stanowi solidną podstawę do dalszego rozbudowania — np. o obsługę wielu restauracji zarządzanych przez oddzielnych właścicieli, integrację z systemem płatności czy aplikację mobilną.
+Do mocnych stron projektu należą: czytelna architektura warstwowa, mechanizm zabezpieczenia przed podwójnym bookingiem, przemyślany system uwierzytelniania z tokenami JWT, automatyczna dokumentacja API oraz obecność testów automatycznych. Projekt jest aktywnie rozwijany — ostatnio wzbogacony o moduł analizy i optymalizacji stolików, który dostarcza administratorowi konkretnych, opartych na danych rekomendacji dotyczących zarządzania zasobami restauracji. Stanowi to solidną podstawę do dalszego rozbudowania — np. o obsługę wielu restauracji zarządzanych przez oddzielnych właścicieli, integrację z systemem płatności czy aplikację mobilną.
 
 ---
 
