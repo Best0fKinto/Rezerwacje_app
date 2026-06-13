@@ -30,7 +30,7 @@ export default function NotFoundPage() {
         </text>
       </svg>
       <h1 className="text-2xl font-bold">Page not found</h1>
-      <p className="text-muted-foreground">The page you're looking for doesn't exist.</p>
+      <p className="text-muted-foreground">The page you're looking for doesn't exist. You can create it :) </p>
       <a href="/" className="text-primary underline">
         Go home
       </a>
