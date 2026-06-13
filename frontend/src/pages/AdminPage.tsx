@@ -168,7 +168,7 @@ export default function AdminPage() {
       setTables((prev) => prev.map((t) => (t.id === table.id ? data : t)))
       toast.success(`Table ${table.table_number} ${data.is_active ? 'activated' : 'deactivated'}.`)
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to toggle table')
+      toast.error(error.response?.data?.detail || 'Failed to toggle table ;(')
     } finally {
       setTableActionId(null)
     }
