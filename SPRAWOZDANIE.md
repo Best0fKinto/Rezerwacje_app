@@ -2,7 +2,7 @@
 
 **Repozytorium:** https://github.com/Best0fKinto/Rezerwacje_app  
 **Data sporządzenia sprawozdania:** Czerwiec 2026
-# Autorzy: Wiktor, Dominik, Vladyslav, Agnieszka
+# Autorzy: Wiktor 52757, Dominik 52745, Vladyslav 54118, Agnieszka 54171
 ---
 
 ## 1. Wstęp
