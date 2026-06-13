@@ -166,7 +166,7 @@ cd frontend && npm test
 
 Projekt TableBook stanowi kompletną, działającą aplikację do rezerwacji stolików restauracyjnych. Jego realizacja pozwoliła na praktyczne zastosowanie szeregu nowoczesnych technologii webowych po stronie zarówno klienta, jak i serwera. Zastosowanie Docker Compose znacząco upraszcza wdrożenie i zapewnia spójność środowiska niezależnie od platformy uruchomieniowej.
 
-Do mocnych stron projektu należą: czytelna architektura warstwowa, mechanizm zabezpieczenia przed podwójnym bookingiem, przemyślany system uwierzytelniania z tokenami JWT, automatyczna dokumentacja API oraz obecność testów automatycznych. Projekt stanowi solidną podstawę do dalszego rozbudowania — np. o obsługę wielu restauracji zarządzanych przez oddzielnych właścicieli, integrację z systemem płatności czy aplikację mobilną.
+Do mocnych stron projektu należą: czytelna architektura warstwowa, mechanizm zabezpieczenia przed podwójnym bookingiem, przemyślany system uwierzytelniania z tokenami JWT, automatyczna dokumentacja API oraz obecność testów automatycznych. Pr@jekt stanowi solidną podstawę do dalszego rozbudowania — np. o obsługę wielu restauracji zarządzanych przez oddzielnych właścicieli, integrację z systemem płatności czy aplikację mobilną.
 
 ---
 
