@@ -189,4 +189,4 @@ restaurant-reservation/
         ├── store/        (authStore — Zustand)
         ├── lib/          (api — axios, utils)
         └── tests/        (authStore.test.ts, reservationForm.test.tsx)
-```
+``` 
